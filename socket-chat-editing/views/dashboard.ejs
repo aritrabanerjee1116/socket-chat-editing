@@ -1,0 +1,278 @@
+<!-- <h1>welcome to user dashboard</h1>
+<h2>hi....  <%= data.name%></h2>
+<h2>hi....  <%= data.email%></h2>
+
+<h3><a href="/logout">Logout</a></h3> -->
+
+
+<%- include('./layout/header.ejs') %>
+        <!-- Page Content  -->
+      <div id="content" class="p-4 p-md-5 pt-5">
+        <h2 class="mb-4">Hi.. <%= data.name%></h2>
+        <div class="row">
+          <div class="col-md-3">
+            <ul class="list-group">
+              <%             
+              if(users.length>0){
+                users.forEach(function(user){
+                  %>
+
+                  <li class="list-group-item cursor-pointer user-list flex justify-between items-center"
+                  data-id="<%= user._id %>" 
+                  id="user-card">
+                    <div class="flex items-center gap-2">
+                      <img src="https://cdn-icons-png.flaticon.com/512/219/219970.png"
+                      height="40" 
+                      width="40" 
+                      />
+                      <span class="username"><%= user.name %></span>
+                    </div>
+
+                    <span
+ class="hidden bg-red-500 text-white text-xs px-2 py-1 rounded-full"
+ id="badge-<%= user._id %>"
+>
+</span>
+
+                    <%
+                    if(user['is_online']==1){%>
+                      <sup class="online-status" id="<%=user['_id']%>-status">Online</sup>
+                      <%
+                    }else{%>
+                      <sup class="offline-status" id="<%=user['_id']%>-status">Offline</sup>
+
+                      <%}%>
+                  </li>
+                  <%
+                })
+              }else{
+                %>   
+                <li class="list-group-item">No user found</li>
+                <%
+              }              
+              %>
+            </ul>
+          </div>
+
+          <div class="col-md-9">
+            <h3 class="start-head">Chat With Friends</h3>
+
+            <div class="chat-section">
+              <div id="chat-container" class="h-[400px] overflow-y-auto p-4 bg-white rounded shadow">
+
+                <!-- <div class="current-user-chat">
+                  <h5>hello</h5>
+                </div>
+                <div class="distance-user-chat">
+                  <h5>hi</h5>
+                </div> -->
+                
+
+
+            </div>
+            <form id="chat-form" class="flex gap-2 mt-3">
+  <input
+    type="text"
+    id="message"
+    class="flex-1 border rounded px-3 py-2 focus:outline-none"
+    placeholder="Write a message..."
+  />
+  <button class="bg-blue-600 text-white px-4 py-2 rounded">
+    Send
+  </button>
+</form>
+
+
+          </div>
+        </div>
+        
+      </div>
+		</div>
+
+<audio id="notif-sound">
+  <source src="/phantom.mp3" type="audio/mpeg">
+</audio>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.2/socket.io.js" integrity="sha512-VJ6+sp2E5rFQk05caiXXzQd1wBABpjEj1r5kMiLmGAAgwPItw1YpqsCCBtq8Yr1x6C49/mTpRdXtq8O2RcZhlQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script>
+  var sender_id = "<%= data._id%>"
+  var receiver_id = "";
+  var socket= io("/user-name",{
+    auth:{
+      token:'<%= data._id%>'
+    }
+  });
+
+  // Handling notification sound
+
+  let audioUnlocked = false;
+  const notifSound = document.getElementById("notif-sound");
+
+  function unlockAudio() {
+    if (audioUnlocked) return;
+    notifSound.play().then(() => {
+      notifSound.pause();
+      notifSound.currentTime = 0;
+      audioUnlocked = true;
+      console.log("notification sound unlocked testing......");
+    }).catch(() => {});
+
+    // when the user clicks or presses a key, unlock the audio
+    document.removeEventListener("click", unlockAudio);
+    document.removeEventListener("keydown", unlockAudio);
+    console.log("notification sound unlocked successfully");
+  }
+
+  document.addEventListener("click", unlockAudio);
+  document.addEventListener("keydown", unlockAudio);
+
+    $(document).ready(function(){
+      $(".user-list").click(function(){
+        receiver_id = $(this).data("id");
+        var name = $(this).text().trim();
+        $(".start-head").text(name);
+        $(".chat-section").show();
+      });
+
+      $("#chat-form").submit(function(e){
+        e.preventDefault();
+
+
+        if (!receiver_id) {
+          alert("Please select a user first");
+          return;
+        }
+
+        var message = $("#message").val();
+
+        console.log('message', message);
+        console.log('sender id', sender_id);
+        console.log('reciver id', receiver_id);
+        
+        $.ajax({
+          url: "/save-chat",
+          type: "POST",
+          dataType: "json",
+          data: {
+            sender_id: sender_id,
+            receiver_id: receiver_id,
+            message: message
+          },
+          success: function(data){
+            console.log(data.data.message);
+            if(data.success){
+                    $("#message").val("")
+                     let html = `
+                     <div class="flex justify-end mb-2">
+                      <div class="bg-blue-500 text-white px-4 py-2 rounded-lg max-w-xs">
+                        ${data.data.message}
+                        </div>
+                      </div>`;
+                      $("#chat-container").append(html);
+                      socket.emit('new-message',data.data)
+                  }else{
+                    alert(data.message)
+                  }
+                }
+              });
+            });
+          });
+
+      socket.on("load-new-message", function (data) {
+        // If current chat is open show the message
+    if (
+    sender_id === data.receiver_id &&
+    receiver_id === data.sender_id
+  ) {
+    const html = `
+      <div class="flex justify-start mb-2">
+        <div class="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg max-w-xs">
+          ${data.message}
+        </div>
+      </div>
+    `;
+    $("#chat-container").append(html);
+    return;
+  }
+
+  // Chat is not open show notification badge
+  const badge = $(`#badge-${data.sender_id}`);
+
+  if (badge.length) {
+    let count = parseInt(badge.text()) || 0;
+    badge.text(count + 1);
+    badge.removeClass("hidden");
+    if (audioUnlocked) {
+    notifSound.play().catch(() => {});
+  }
+}
+});
+
+      //update online status
+      socket.on("OnlineUser",function(data){
+      
+          $("#"+data.user_id+"-status").text("Online")
+          $("#"+data.user_id+"-status").removeClass("offline-status")
+          $("#"+data.user_id+"-status").addClass("online-status") 
+      })
+
+      //update offline status
+      socket.on("OfflineUser",function(data){
+        
+          $("#"+data.user_id+"-status").text("Offline")
+          $("#"+data.user_id+"-status").addClass("offline-status")
+          $("#"+data.user_id+"-status").removeClass("online-status")
+      })
+    </script>
+
+  <script>
+  $(".user-list").click(function () {
+  receiver_id = $(this).data("id");
+
+  // clear notification badge if it exists
+  const badge = $(`#badge-${receiver_id}`);
+  badge.text("0").addClass("hidden");
+
+  const name = $(this).text().trim();
+  $(".start-head").text(name);
+  $(".chat-section").show();
+
+  // clear old messages
+  $("#chat-container").html("");
+
+  // fetch new messages based on receiver_id
+  fetch(`/get-chats?receiver_id=${receiver_id}`)
+    .then(res => res.json())
+    .then(data => {
+      console.log(`Backend response data:`, data)
+      data.chats.forEach(chat => {
+        // add message to chat container
+        const html =
+          chat.sender_id === sender_id
+          // Sender
+            ? `
+              <div class="flex justify-end mb-2">
+                <div class="bg-blue-500 text-white px-4 py-2 rounded-lg max-w-xs">
+                  ${chat.message}
+                </div>
+              </div>`
+            : `
+              <div class="flex justify-start mb-2">
+                <div class="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg max-w-xs">
+                  ${chat.message}
+                </div>
+              </div>`;
+
+        $("#chat-container").append(html);
+      });
+
+      $("#chat-container").scrollTop(
+        $("#chat-container")[0].scrollHeight
+      );
+    });
+});
+</script>
+
+<%- include('./layout/footer.ejs') %>
